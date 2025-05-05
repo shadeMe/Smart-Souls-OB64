@@ -9,7 +9,15 @@
                 commit = "da016bf271a4a37cd9e89cf772b0d3d730767843",
                 url = "https://gitlab.com/tboox/xmake-repo.git"
             },
-            version = "3.30.5"
+            version = "3.30.5-msvc23"
+        },
+        ["ninja#31fecfc4"] = {
+            repo = {
+                branch = "master",
+                commit = "362d0d4a9a44301540cfc45baa92824c9eb62ced",
+                url = "https://github.com/xmake-io/xmake-repo.git"
+            },
+            version = "1.12.1"
         },
         ["rsm-mmio#31fecfc4"] = {
             repo = {
@@ -19,6 +27,14 @@
             },
             version = "2.0.0"
         },
+        ["simpleini#31fecfc4"] = {
+            repo = {
+                branch = "master",
+                commit = "362d0d4a9a44301540cfc45baa92824c9eb62ced",
+                url = "https://github.com/xmake-io/xmake-repo.git"
+            },
+            version = "v4.22"
+        },
         ["spdlog#9c36f0a9"] = {
             repo = {
                 branch = "master",
@@ -26,6 +42,14 @@
                 url = "https://gitlab.com/tboox/xmake-repo.git"
             },
             version = "v1.15.2"
+        },
+        ["xbyak#31fecfc4"] = {
+            repo = {
+                branch = "master",
+                commit = "362d0d4a9a44301540cfc45baa92824c9eb62ced",
+                url = "https://github.com/xmake-io/xmake-repo.git"
+            },
+            version = "v7.06"
         }
     }
 }

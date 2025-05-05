@@ -5,13 +5,16 @@ set_xmakever("2.8.2")
 includes("lib/commonlibob64")
 
 -- set project
-set_project("commonlibob64-template")
-set_version("0.0.0")
+set_project("Smart-Souls")
+set_version("1.0.0")
 set_license("GPL-3.0")
 
 -- set defaults
 set_languages("c++23")
 set_warnings("allextra")
+set_optimize("faster")
+set_warnings("allextra", "error")
+set_defaultmode("releasedbg")
 
 -- set policies
 set_policy("package.requires_lock", true)
@@ -20,16 +23,20 @@ set_policy("package.requires_lock", true)
 add_rules("mode.debug", "mode.releasedbg")
 add_rules("plugin.vsxmake.autoupdate")
 
+-- add config
+set_config("rex_ini", true)
+set_config("obse_xbyak", true)
+
 -- targets
-target("commonlibob64-template")
+target("Smart-Souls")
     -- add dependencies to target
     add_deps("commonlibob64")
 
     -- add commonlibsse plugin
     add_rules("commonlibob64.plugin", {
-        name = "commonlibob64-template",
-        author = "qudix",
-        description = "OBSE plugin template using CommonLibOB64"
+        name = "Smart-Souls",
+        author = "shadeMe",
+        description = "OBSE plugin to ehance the behaviour of soul trapping",
     })
 
     -- add src files
@@ -37,3 +44,6 @@ target("commonlibob64-template")
     add_headerfiles("src/**.h")
     add_includedirs("src")
     set_pcxxheader("src/pch.h")
+
+    -- add extra files
+    add_extrafiles(".clang-format")
