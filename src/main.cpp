@@ -1,5 +1,5 @@
-#include "Config.h"
 #include "Internals.h"
+#include "Config.h"
 
 namespace Hooks
 {
@@ -8,8 +8,8 @@ namespace Hooks
 	namespace InventoryChanges_SetBestSoulGem
 	{
 		AddressT Function{ REL::Offset(0x6671860) };
-		AddressT Target{ Function.address() + 0xA5 };
-		AddressT Return{ Function.address() + 0x3DB };
+		AddressT Target{ Function.address() + 0xD2 };
+		AddressT Return{ Function.address() + 0x3A3 };
 
 
 		FinalCandidates* Hook_SelectBestSoulGem(InventoryChanges* Changes, TESObjectREFR* DeadActor, FinalCandidates* OutCandidates)
@@ -20,14 +20,17 @@ namespace Hooks
 			if (Changes->pRef == nullptr)
 				return OutCandidates;
 
-			const auto IsNpc{ DeadActor->data.pObjectReference->cFormType == FormType::CREA_ID };
-
-			REX::INFO("Changes owner: {:08X} | DeadActor: {:08X} | IsCreature: {}",
+			REX::INFO("{}", std::string(70, '#'));
+			REX::INFO("Soul Trap by '{:08X}' on '{:08X}'",
 			          Changes->pRef->iFormID,
-			          DeadActor->iFormID,
-			          !IsNpc);
+			          DeadActor->iFormID);
 
-			return OutCandidates;
+			auto Out { SelectBestSoulGem(Changes, DeadActor) };
+			OutCandidates->BaseContainer = Out.BaseContainer;
+			OutCandidates->Inventory = Out.Inventory;
+			REX::INFO("{}", std::string(70, '#'));
+
+			return OutCandidates; 
 		}
 
 		struct Hook : Xbyak::CodeGenerator
@@ -48,7 +51,12 @@ namespace Hooks
 				call(rax);
 				mov(r12, ptr[rax]);
 				mov(rdi, ptr[rax + 0x8]);
-				add(rsp, 0x10);
+				add(rsp, sizeof(FinalCandidates));
+
+				// Ensure that we take the correct exitpath,
+				// i.e., the one that restores non-volatile registers.
+				xor_(rax, rax);
+				xor_(r13, r13); 
 
 				add(rsp, 0x20);
 				pop(r9);
@@ -71,6 +79,9 @@ namespace Hooks
 				Target.address(),
 				reinterpret_cast<std::uintptr_t>(Trampoline.allocate(Code)));
 
+			// Nop out the bits that would otherwise overwrite 
+			// the outputs of our hook.
+			Function.write_fill<0x3D8>(REL::NOP, 3); 
 		}
 	}
 
@@ -80,18 +91,16 @@ namespace Hooks
 
 		void Install()
 		{
-			// Patch bugged, inverted jump after soul gem type check.
-			Function.write<0x3B>({0xF});
-			// Skip the next check for the soul value.
-			Function.write_fill<0x3D>(REL::NOP, 5);
-			// Unconditional jump out of the function.
-			Function.write<0x44>({0xEB});
+			// Nop out bugged, inverted jump after soul gem dynamic
+			// cast check and the soul level comparison.
+			Function.write_fill<0x3B>(REL::NOP, 9); 
+			// Patch jnz to jz to exit when the dynamic cast fails.
+			Function.write<0x44 + 0x1>({0x84});
 		}
 	}
 
 	static void Install()
 	{
-		//REL::GetTrampoline().create(0x100);
 		InventoryChanges_SetBestSoulGem::Install();
 		ItemChange_SetSoul::Install();
 
@@ -123,15 +132,21 @@ OBSE_PLUGIN_PRELOAD(const OBSE::PreLoadInterface* a_obse)
 	//	::Sleep(500);
 
 	OBSE::Init(a_obse);
+	
 	REX::INFO("Preload");
 	return true;
 }
 
 OBSE_PLUGIN_LOAD(const OBSE::LoadInterface* a_obse)
 {
+	spdlog::default_logger()->set_level(spdlog::level::debug);
+
 	OBSE::Init(a_obse, { .trampoline = true, .trampolineSize = 0x100 });
 	OBSE::GetMessagingInterface()->RegisterListener(MessageHandler);
+
+	Config::Load();
 	Hooks::Install();
+
 	REX::INFO("Load");
 	return true;
 }

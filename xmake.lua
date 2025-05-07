@@ -36,7 +36,7 @@ target("Smart-Souls")
     add_rules("commonlibob64.plugin", {
         name = "Smart-Souls",
         author = "shadeMe",
-        description = "OBSE plugin to ehance the behaviour of soul trapping",
+        description = "OBSE plugin to enhance soul trapping",
     })
 
     -- add src files

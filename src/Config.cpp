@@ -22,8 +22,13 @@ namespace Config
 		{
 			return ESoulTrapMode::UpgradeSoulGem;
 		}
+		else if (SoulTrapMode.GetValue() == "default")
+		{
+			return ESoulTrapMode::Default;
+		}
 		else
 		{
+			REX::WARN("Unknown soul trap mode '{}'; falling back to default mode", SoulTrapMode.GetValue());
 			return ESoulTrapMode::Default;
 		}
 	}

@@ -24,16 +24,9 @@ public:
 	void Enroll(TESSoulGem* SoulGem, ItemChange* InventoryChange);
 	void Enroll(TESSoulGem* SoulGem, ContainerObject* BaseContainerItem, ItemChange* InventoryChange);
 
-	enum class ESelectMode
-	{
-		BaseContainerOnly,
-		InventoryOnly,
-		BaseContainerAndInventory
-	};
-
-	SoulBucket Select(ESelectMode Mode) const;
 	BucketT::const_iterator begin() const;
 	BucketT::const_iterator end() const;
+	std::size_t size() const;
 };
 
 struct FinalCandidates
@@ -43,5 +36,7 @@ struct FinalCandidates
 
 	FinalCandidates();
 };
+
+FinalCandidates SelectBestSoulGem(InventoryChanges* Changes, TESObjectREFR* DeadActor);
 
 

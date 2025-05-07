@@ -3,7 +3,8 @@
 #include <stdint.h>
 #include <unordered_map>
 #include <vector>
-#include <algorithms>
+#include <algorithm>
+#include <format>
 
 #include <RE/Oblivion.h>
 #include <OBSE/OBSE.h>
@@ -20,5 +21,3 @@
 #include "RE/BSExtraData.h" 
 
 using AddressT = REL::Relocation<std::uintptr_t>;
-
-#define NOMINMAX

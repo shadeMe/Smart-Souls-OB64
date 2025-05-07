@@ -1,6 +1,9 @@
 #include "Internals.h"
 #include "Config.h"
 
+#undef min
+#undef max
+
 Candidate::Candidate(TESSoulGem* SoulGem) :
 	SoulGem(SoulGem),
 	BaseContainerItem(nullptr),
@@ -20,11 +23,17 @@ std::uint16_t Candidate::GetCount() const
 	// We'll just make the same assumption that the game appears to make (seen in the
 	// GetItemCount console command; which by all accounts breaks several corner cases),
 	// i.e., the delta count in the inventory changes correctly accounts for any extra
-	// data-based counts in its stacks.
+	// data-based counts in its stacks. Note that the delta count should includes the 
+	// items that do not have an extradata list.
+	// 
+	// For example, you have 3 empty soul gems in the inventory. They have a single
+	// ItemChange entry with a delta count of 3 (assuming that there were none in the base
+	// container) and no extradata lists. After capturing a soul in one of them, a new extradata
+	// list is allocated for the it (containing an ExtraSoul instance).
 	const auto BaseCount{ static_cast<std::int32_t>(BaseContainerItem ? abs(BaseContainerItem->i_count) : 0) };
 	const auto InventoryCount{ InventoryChange ? InventoryChange->iNumber : 0 };
 
-	const std::uint32_t Total{ std::clamp(BaseCount + InventoryCount, 0, static_cast<std::int32_t>(std::numeric_limits<std::uint16_t>::max())) };
+	const std::uint32_t Total{ static_cast<std::uint32_t>(std::clamp(BaseCount + InventoryCount, 0, static_cast<std::int32_t>(std::numeric_limits<std::uint16_t>::max()))) };
 	return static_cast<std::uint16_t>(Total);
 }
 
@@ -34,7 +43,7 @@ void SoulBucket::Enroll(TESSoulGem* SoulGem, ContainerObject* BaseContainerItem)
 	if (Match != Store.end())
 	{
 		if (Match->second.BaseContainerItem != nullptr)
-			REX::WARN("Soulgem '{}' already enrolled with base container entry {:16X}", SoulGem->cFullName.pString, Match->second.BaseContainerItem);
+			REX::WARN("Soulgem '{}' already enrolled with base container entry {:#016X}", SoulGem->cFullName.pString, reinterpret_cast<std::uintptr_t>(Match->second.BaseContainerItem));
 
 		Match->second.BaseContainerItem = BaseContainerItem;
 	}
@@ -52,7 +61,7 @@ void SoulBucket::Enroll(TESSoulGem* SoulGem, ItemChange* InventoryChange)
 	if (Match != Store.end())
 	{
 		if (Match->second.InventoryChange != nullptr)
-			REX::WARN("Soulgem '{}' already enrolled with inventory change entry {:16X}", SoulGem->cFullName.pString, Match->second.InventoryChange);
+			REX::WARN("Soulgem '{}' already enrolled with inventory change entry {:#016X}", SoulGem->cFullName.pString, reinterpret_cast<std::uintptr_t>(Match->second.InventoryChange));
 		Match->second.InventoryChange = InventoryChange;
 	}
 	else
@@ -69,38 +78,6 @@ void SoulBucket::Enroll(TESSoulGem* SoulGem, ContainerObject* BaseContainerItem,
 	Enroll(SoulGem, InventoryChange);
 }
 
-SoulBucket SoulBucket::Select(ESelectMode Mode) const
-{
-	SoulBucket Out;
-
-	for (const auto& Itr : Store)
-	{
-		switch (Mode)
-		{
-		case ESelectMode::BaseContainerOnly:
-		{
-			if (Itr.second.BaseContainerItem != nullptr && Itr.second.InventoryChange == nullptr)
-				Out.Enroll(Itr.second.SoulGem, Itr.second.BaseContainerItem);
-			break;
-		}
-		case ESelectMode::InventoryOnly:
-		{
-			if (Itr.second.BaseContainerItem == nullptr && Itr.second.InventoryChange != nullptr)
-				Out.Enroll(Itr.second.SoulGem, Itr.second.InventoryChange);
-			break;
-		}
-		case ESelectMode::BaseContainerAndInventory:
-		{
-			if (Itr.second.BaseContainerItem != nullptr && Itr.second.InventoryChange != nullptr)
-				Out.Enroll(Itr.second.SoulGem, Itr.second.BaseContainerItem, Itr.second.InventoryChange);
-			break;
-		}
-		}
-	}
-
-	return Out;
-}
-
 SoulBucket::BucketT::const_iterator SoulBucket::begin() const
 {
 	return Store.cbegin();
@@ -109,6 +86,11 @@ SoulBucket::BucketT::const_iterator SoulBucket::begin() const
 SoulBucket::BucketT::const_iterator SoulBucket::end() const
 {
 	return Store.cend();
+}
+
+std::size_t SoulBucket::size() const
+{
+	return Store.size();
 }
 
 FinalCandidates::FinalCandidates() :
@@ -167,20 +149,26 @@ namespace
 			InventoryStackId(std::nullopt)
 		{}
 
-		inline bool Passed() const {
+		inline bool Passed() const
+		{
 			return Sentience && Capacity;
 		}
 	};
 
 	bool CheckSentience(const Candidate& Candidate, const bool IsSentient, SoulSacrificeChecks* OutChecks)
 	{
-		const auto IsBlackSoulGem{ Candidate.SoulGem == TESSoulGem::BlackSoulGem.get() };
+		// For some reason, the formID of the default form is set to zero.
+		const auto IsBlackSoulGem{ (Candidate.SoulGem->iFormID & 0x00FFFFFF) == 0x192 };
+		REX::DEBUG("IsSentient: {} | IsBlackSoulGem: {} | RestrictToNPCs: {}", IsSentient, IsBlackSoulGem, Config::RestrictBlackSoulGemsToNpcs.GetValue());
+
 		if (IsSentient)
 			OutChecks->Sentience = IsBlackSoulGem;
 		else if (Config::RestrictBlackSoulGemsToNpcs.GetValue())
 			OutChecks->Sentience = !IsBlackSoulGem;
 		else
 			OutChecks->Sentience = true;
+
+		REX::DEBUG("\t{}", OutChecks->Sentience ? "PASS" : "FAIL");
 
 		return OutChecks->Sentience;
 	}
@@ -191,33 +179,43 @@ namespace
 		const auto MaxValue{ TESSoulGem::GetSoulLevelValue(CandidateCapacity) };
 		const auto TargetValue{ TESSoulGem::GetSoulLevelValue(Target) };
 
+		REX::DEBUG("Mode: {} | Current: {} | Capacity: {} | Target: {}", Config::SoulTrapMode.GetValue(), CurrentValue, MaxValue, TargetValue);
+
+		bool Result{ false };
+
 		switch (Config::GetSoulTrapMode())
 		{
 		case Config::ESoulTrapMode::Default:
 		{
 			// Allow souls that are either the same as or smaller than capacity.
 			// Only consider currently empty soulgems.
-			if (CandidateCurrent != SOUL_LEVEL::SOUL_NONE)
-				return false;
-			return MaxValue >= TargetValue;
+			if (CandidateCurrent == SOUL_LEVEL::SOUL_NONE)
+				Result = MaxValue >= TargetValue;
+
+			break;
 		}
 		case Config::ESoulTrapMode::ExactSoulGem:
 		{
 			// Allow souls that are exactly the same size as capacity.
 			// Only consider currently empty soulgems.
-			if (CandidateCurrent != SOUL_LEVEL::SOUL_NONE)
-				return false;
-			return MaxValue == TargetValue;
+			if (CandidateCurrent == SOUL_LEVEL::SOUL_NONE)
+				Result = MaxValue == TargetValue;
+
+			break;
 		}
 		case Config::ESoulTrapMode::UpgradeSoulGem:
 		{
 			// Allow souls that are larger than the current occupant and
 			// at most the capacity.
-			return TargetValue > CurrentValue && TargetValue <= MaxValue;
+			Result = TargetValue > CurrentValue && TargetValue <= MaxValue;
+
+			break;
 		}
-		default:
-			return false;
 		}
+
+		REX::DEBUG("\t{}", Result ? "PASS" : "FAIL");
+
+		return Result;
 	}
 
 	bool CheckCapacity(const Candidate& Candidate, const SOUL_LEVEL TargetSoulLevel, SoulSacrificeChecks* OutChecks)
@@ -229,12 +227,12 @@ namespace
 		auto BaseSoulCapacity{ static_cast<SOUL_LEVEL>(Candidate.SoulGem->cSoulCapacity) };
 
 		const auto Prefilled{ BaseSoulLevel != SOUL_LEVEL::SOUL_NONE };
-		if (Config::UsePrefilledGems.GetValue() || Prefilled)
+		REX::DEBUG("Item Count: {} | Prefilled: {} | UsePrefilledGems: {}", Candidate.GetCount(), Prefilled, Config::UsePrefilledGems.GetValue());
+		if ((Prefilled && !Config::UsePrefilledGems.GetValue()) || Candidate.GetCount() == 0)
+		{
+			REX::DEBUG("\tFAIL");
 			return false;
-
-		// If the total resolved count is not positive, nothing to do here.
-		if (Candidate.GetCount() == 0)
-			return false;
+		}
 
 		if (Candidate.HasInventory())
 		{
@@ -243,26 +241,54 @@ namespace
 			{
 				// A singleton item with no extradata stacks, so the base soul level
 				// is the one we need to compare against the target.
+				REX::DEBUG("Singleton inventory item ");
 				OutChecks->Capacity = CompareSoulValues(BaseSoulLevel, BaseSoulCapacity, TargetSoulLevel);
 			}
 			else
 			{
 				// Fetch the first stack that can fit our target.
-				std::size_t idx{ 0 };
+				REX::DEBUG("Stacks: {}", Change->pExtraObjectList->Count());
+				if (Change->pExtraObjectList->Count())
+					REX::DEBUG("{}", std::string(70, '-'));
+				
+				std::size_t Idx{ 0 };
+				std::uint32_t ProcessedItemsInStacks {0};
 				for (auto Itr{ Change->pExtraObjectList }; Itr != nullptr && Itr->m_item != nullptr; Itr = Itr->m_pkNext)
 				{
 					auto Stack{ Itr->m_item };
-					const auto HasSoul{ Stack->GetExtraData(EXTRA_DATA_TYPE::EXTRA_SOUL) };
-					const auto StackSoulLevel{ HasSoul ? Stack->GetSoul() : BaseSoulLevel };
+					const auto xSoul{ Stack->GetExtraData(EXTRA_DATA_TYPE::EXTRA_SOUL) };
+					const auto StackSoulLevel{ xSoul ? Stack->GetSoul() : BaseSoulLevel };
+					const auto StackCount { Stack->GetCount() };
+
+					// TODO: Stacks with multiple items (StackCount > 1) can potentially get 
+					// selected here, resulting in every gem in the stack to have the target
+					// soul level. This is exploitable and should be fixed at some point -
+					// clone the stack, remove the extra count from the clone, reduce the count
+					// of the old stack by one, remove the soul extra data from the clone and
+					// prepend it to the stack list (so that ItemChange::SetSoul will pick it
+					// correctly).
+					REX::DEBUG("[{}] xSoul: {:#016X} | StackSoulLevel: {} | StackCount: {}", Idx, reinterpret_cast<std::uintptr_t>(xSoul), static_cast<std::uint8_t>(StackSoulLevel), StackCount);
 
 					OutChecks->Capacity = CompareSoulValues(StackSoulLevel, BaseSoulCapacity, TargetSoulLevel);
+					ProcessedItemsInStacks += StackCount;
+
 					if (OutChecks->Capacity)
 						break;
-					++idx;
+					++Idx;
+
+					REX::DEBUG("{}", std::string(70, '-'));
 				}
 
+				
 				if (OutChecks->Capacity)
-					OutChecks->InventoryStackId.emplace(idx);
+					OutChecks->InventoryStackId.emplace(Idx);
+				else if (const auto NonStackedCount {  Candidate.GetCount() - ProcessedItemsInStacks }; NonStackedCount > 0)
+				{
+					// The above count represents the items that are not part of the stacks,
+					// i.e., have no extradata. So, they are essentially the same as singleton items.
+					REX::DEBUG("Ex-stack inventory items | Count: {}", NonStackedCount);
+					OutChecks->Capacity = CompareSoulValues(BaseSoulLevel, BaseSoulCapacity, TargetSoulLevel);
+				}
 			}
 		}
 		else
@@ -273,109 +299,108 @@ namespace
 		return OutChecks->Capacity;
 	}
 
-	bool SoulSacrificeSorter(const Candidate& First, const Candidate& Second)
+	bool SoulSacrificeSorter(const std::pair<Candidate, SoulSacrificeChecks>& First, const std::pair<Candidate, SoulSacrificeChecks>& Second)
 	{
 		// Special-case Azura's Star - it gets consumed first whenever possible.
-		if (First.SoulGem == TESSoulGem::AzurasStar.get())
+		// For some reason, the formID of the default form is set to zero.
+		if ((First.first.SoulGem->iFormID & 0x00FFFFFF) == 0x193)
 			return true;
+		else if ((Second.first.SoulGem->iFormID & 0x00FFFFFF) == 0x193)
+			return false; 
 		else
-			return First.SoulGem->cSoulCapacity < Second.SoulGem->cSoulCapacity;
+			return First.first.SoulGem->cSoulCapacity < Second.first.SoulGem->cSoulCapacity;
 	}
+}
 
-	FinalCandidates SelectBestSoulGem(InventoryChanges* Changes, TESObjectREFR* DeadActor)
+FinalCandidates SelectBestSoulGem(InventoryChanges* Changes, TESObjectREFR* DeadActor)
+{
+	using ShortlistT = std::vector<std::pair<Candidate, SoulSacrificeChecks>>;
+
+	const auto TargetSoulLevel{
+		DeadActor->data.pObjectReference->cFormType == FormType::CREA_ID ? GetCreatureSoulLevel(DeadActor->data.pObjectReference) : SOUL_LEVEL::SOUL_GRAND
+	};
+	const auto SentientSoul{
+		DeadActor->cFormType == FormType::NPC__ID
+	};
+
+	SoulBucket MainBucket;
+	ShortlistT BaseContainerOnly, Inventory;
+
+	auto OwnerBaseContainer{ Changes->pRef->HasContainer() };
+
+	// Skip anything that doesn't have a base container.
+	// Should never happen in practice.
+	if (OwnerBaseContainer == nullptr)
+		return FinalCandidates();
+
+	EnumerateBaseContainer(OwnerBaseContainer, &MainBucket);
+	EnumerateInventoryChanges(Changes, &MainBucket);
+
+	REX::DEBUG("Enumerated {} candidates", MainBucket.size());
+
+	// Check and separate candidates by separating into two more shortlists.
+	for (const auto& Itr : MainBucket)
 	{
-		using ShortlistT = std::vector<std::pair<Candidate, SoulSacrificeChecks>>;
+		REX::DEBUG("{}", std::string(70, '='));
+		REX::DEBUG("Checking candidate '{}' ({:08X}) | HasInventory: {}", Itr.first->cFullName.pString, Itr.first->iFormID, Itr.second.HasInventory());
 
-		const auto TargetSoulLevel{
-			DeadActor->cFormType == FormType::CREA_ID ? GetCreatureSoulLevel(DeadActor->data.pObjectReference) : SOUL_LEVEL::SOUL_GRAND
-		};
-		const auto SentientSoul{
-			DeadActor->cFormType == FormType::NPC__ID
-		};
+		SoulSacrificeChecks NoChecksAndBalances;
 
-		SoulBucket MainBucket;
-		ShortlistT BaseContainerOnly, Inventory;
-
-		auto OwnerBaseContainer{ Changes->pRef->HasContainer() };
-
-		// Skip anything that doesn't have a base container.
-		// Should never happen in practice.
-		if (OwnerBaseContainer == nullptr)
-			return FinalCandidates();
-
-		EnumerateBaseContainer(OwnerBaseContainer, &MainBucket);
-		EnumerateInventoryChanges(Changes, &MainBucket);
-
-		// Check and separate candidates by separating into two more shortlists.
-		for (const auto& Itr : MainBucket)
+		if (!CheckSentience(Itr.second, SentientSoul, &NoChecksAndBalances))
 		{
-			SoulSacrificeChecks NoChecksAndBalances;
-			
-			CheckSentience(Itr.second, SentientSoul, &NoChecksAndBalances);
-			if (!NoChecksAndBalances.Sentience)
-				continue;
-
-			CheckCapacity(Itr.second, TargetSoulLevel, &NoChecksAndBalances);
-
-			if (!NoChecksAndBalances.Passed())
-				continue;
-
-			if (Itr.second.HasInventory())
-				Inventory.emplace_back(Itr.second, NoChecksAndBalances);
-			else
-				BaseContainerOnly.emplace_back(Itr.second, NoChecksAndBalances);
+			REX::DEBUG("{}", std::string(70, '='));
+			continue;
 		}
 
-		FinalCandidates Out;
-
-		// Sort the shortlists such that the smallest (in capacity/value) candidate gets picked.
-		// Candidates with inventory changes are given priority.
-		if (!Inventory.empty())
+		if (!CheckCapacity(Itr.second, TargetSoulLevel, &NoChecksAndBalances))
 		{
-			std::sort(Inventory.begin(), Inventory.end(), SoulSacrificeSorter);
-			auto &First { Inventory.front()};
-
-			// We need to set the inventory stack's soul level to none, other the 
-			// subsequent call to ItemChange::SetSoul will just skip over the stack.
-			if (First.second.InventoryStackId != std::nullopt)
-			{
-				auto xList { *First.first.InventoryChange->pExtraObjectList->At(*First.second.InventoryStackId) };
-				auto xSoul { reinterpret_cast<ExtraSoul*>(xList->GetExtraData(EXTRA_DATA_TYPE::EXTRA_SOUL)) };
-				xSoul->cSoul = SOUL_LEVEL::SOUL_NONE;
-			}
-
-			Out.Inventory = First.first.InventoryChange;
-		}
-		else if (!BaseContainerOnly.empty())
-		{
-			std::sort(BaseContainerOnly.begin(), BaseContainerOnly.end(), SoulSacrificeSorter);
-			Out.BaseContainer = BaseContainerOnly.front().first.SoulGem;
+			REX::DEBUG("{}", std::string(70, '='));
+			continue;
 		}
 
-		return Out;
+		if (Itr.second.HasInventory())
+			Inventory.emplace_back(Itr.second, NoChecksAndBalances);
+		else
+			BaseContainerOnly.emplace_back(Itr.second, NoChecksAndBalances);
+
+		REX::DEBUG("{}", std::string(70, '='));
 	}
 
-	/*
-		- Walk though base container and enumerate soulgems entries
-		- Walk though inventory and enumerate soulgems entries
-			- Match those with ones already found in base container
-		- We'll have a collection of:
-			- Items only found in the base container (no changes in the inventory)
-			- Items only found in the inventory (none in base container)
-			- Items found in both
-		- For each candidate
-			- Sentience check
-			- Capacity check
-				- If empty
-					- Exact size
-					- At least as large
-				- If filled
-					- Larger than incoming and filled size smaller than incoming
-			- For inventory changes, check each stack separately
-		- Sort candidates into above buckets and then sort each bucket by smallest capacity
-			- Special case the Azura's star
-		- Pick the smallest candidate from above
-			- For inventory changes, set the viable stack's soul to None
-		*/
+	FinalCandidates Out;
 
+	REX::DEBUG("Shortlists: BaseContainerOnly [{}] | Inventory [{}] ", BaseContainerOnly.size(), Inventory.size());
+
+	// Sort the shortlists such that the smallest (in capacity/value) candidate gets picked.
+	// Candidates with inventory changes are given priority.
+	if (!Inventory.empty())
+	{
+		std::sort(Inventory.begin(), Inventory.end(), SoulSacrificeSorter);
+		auto& First{ Inventory.front() };
+
+		// We need to set the inventory stack's soul level to none, other the
+		// subsequent call to ItemChange::SetSoul will just skip over the stack.
+		if (First.second.InventoryStackId != std::nullopt)
+		{
+			auto xList{ *First.first.InventoryChange->pExtraObjectList->At(*First.second.InventoryStackId) };
+			auto xSoul{ reinterpret_cast<ExtraSoul*>(xList->GetExtraData(EXTRA_DATA_TYPE::EXTRA_SOUL)) };
+			if (xSoul != nullptr)
+				xSoul->cSoul = SOUL_LEVEL::SOUL_NONE;
+		}
+
+		Out.Inventory = First.first.InventoryChange;
+
+		REX::INFO("\tFinal Candidate: Inventory '{}' ({:08X}) ", First.first.SoulGem->cFullName.pString, First.first.SoulGem->iFormID);
+	}
+	else if (!BaseContainerOnly.empty())
+	{
+		std::sort(BaseContainerOnly.begin(), BaseContainerOnly.end(), SoulSacrificeSorter);
+		auto& First{ BaseContainerOnly.front() };
+		Out.BaseContainer = First.first.SoulGem;
+
+		REX::INFO("\tFinal Candidate: BaseContainerOnly '{}' ({:08X}) ", First.first.SoulGem->cFullName.pString, First.first.SoulGem->iFormID);
+	}
+	else
+		REX::INFO("\tNo usable soulgem");
+
+	return Out;
 }

@@ -31,5 +31,12 @@ public:
 		}
 		return std::nullopt;
 	}
+
+	inline std::size_t Count() const {
+		std::size_t i {0};
+		for (auto* current = this; current != nullptr; current = current->m_pkNext)
+			++i;
+		return i;
+	}
 };
 static_assert(sizeof(BSSimpleList<void *>) == 0x10);
