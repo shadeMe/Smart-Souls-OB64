@@ -173,13 +173,14 @@ namespace
 		return OutChecks->Sentience;
 	}
 
-	bool CompareSoulValues(const SOUL_LEVEL CandidateCurrent, const SOUL_LEVEL CandidateCapacity, const SOUL_LEVEL Target)
+	bool CompareSoulValues(const SOUL_LEVEL CandidateCurrent, const SOUL_LEVEL CandidateCapacity, const SOUL_LEVEL Target, bool IsAzurasStar)
 	{
 		const auto CurrentValue{ TESSoulGem::GetSoulLevelValue(CandidateCurrent) };
 		const auto MaxValue{ TESSoulGem::GetSoulLevelValue(CandidateCapacity) };
 		const auto TargetValue{ TESSoulGem::GetSoulLevelValue(Target) };
 
-		REX::DEBUG("Mode: {} | Current: {} | Capacity: {} | Target: {}", Config::SoulTrapMode.GetValue(), CurrentValue, MaxValue, TargetValue);
+		REX::DEBUG("Mode: {} | Current: {} | Capacity: {} | Target: {} | IsAzurasStar: {}", 
+				Config::SoulTrapMode.GetValue(), CurrentValue, MaxValue, TargetValue, IsAzurasStar);
 
 		bool Result{ false };
 
@@ -199,7 +200,7 @@ namespace
 			// Allow souls that are exactly the same size as capacity.
 			// Only consider currently empty soulgems.
 			if (CandidateCurrent == SOUL_LEVEL::SOUL_NONE)
-				Result = MaxValue == TargetValue;
+				Result = MaxValue == TargetValue || IsAzurasStar;
 
 			break;
 		}
@@ -225,6 +226,7 @@ namespace
 
 		auto BaseSoulLevel{ static_cast<SOUL_LEVEL>(Candidate.SoulGem->cCurrentSoul) };
 		auto BaseSoulCapacity{ static_cast<SOUL_LEVEL>(Candidate.SoulGem->cSoulCapacity) };
+		auto IsAzurasStar { Candidate.SoulGem->IsAzurasStar() };
 
 		const auto Prefilled{ BaseSoulLevel != SOUL_LEVEL::SOUL_NONE };
 		REX::DEBUG("Item Count: {} | Prefilled: {} | UsePrefilledGems: {}", Candidate.GetCount(), Prefilled, Config::UsePrefilledGems.GetValue());
@@ -242,7 +244,7 @@ namespace
 				// A singleton item with no extradata stacks, so the base soul level
 				// is the one we need to compare against the target.
 				REX::DEBUG("Singleton inventory item ");
-				OutChecks->Capacity = CompareSoulValues(BaseSoulLevel, BaseSoulCapacity, TargetSoulLevel);
+				OutChecks->Capacity = CompareSoulValues(BaseSoulLevel, BaseSoulCapacity, TargetSoulLevel, IsAzurasStar);
 			}
 			else
 			{
@@ -269,7 +271,7 @@ namespace
 					// correctly).
 					REX::DEBUG("[{}] xSoul: {:#016X} | StackSoulLevel: {} | StackCount: {}", Idx, reinterpret_cast<std::uintptr_t>(xSoul), static_cast<std::uint8_t>(StackSoulLevel), StackCount);
 
-					OutChecks->Capacity = CompareSoulValues(StackSoulLevel, BaseSoulCapacity, TargetSoulLevel);
+					OutChecks->Capacity = CompareSoulValues(StackSoulLevel, BaseSoulCapacity, TargetSoulLevel, IsAzurasStar);
 					ProcessedItemsInStacks += StackCount;
 
 					if (OutChecks->Capacity)
@@ -287,13 +289,13 @@ namespace
 					// The above count represents the items that are not part of the stacks,
 					// i.e., have no extradata. So, they are essentially the same as singleton items.
 					REX::DEBUG("Ex-stack inventory items | Count: {}", NonStackedCount);
-					OutChecks->Capacity = CompareSoulValues(BaseSoulLevel, BaseSoulCapacity, TargetSoulLevel);
+					OutChecks->Capacity = CompareSoulValues(BaseSoulLevel, BaseSoulCapacity, TargetSoulLevel, IsAzurasStar);
 				}
 			}
 		}
 		else
 		{
-			OutChecks->Capacity = CompareSoulValues(BaseSoulLevel, BaseSoulCapacity, TargetSoulLevel);
+			OutChecks->Capacity = CompareSoulValues(BaseSoulLevel, BaseSoulCapacity, TargetSoulLevel, IsAzurasStar);
 		}
 
 		return OutChecks->Capacity;
@@ -301,11 +303,13 @@ namespace
 
 	bool SoulSacrificeSorter(const std::pair<Candidate, SoulSacrificeChecks>& First, const std::pair<Candidate, SoulSacrificeChecks>& Second)
 	{
-		// Special-case Azura's Star - it gets consumed first whenever possible.
-		// For some reason, the formID of the default form is set to zero.
-		if ((First.first.SoulGem->iFormID & 0x00FFFFFF) == 0x193)
+		// Special-case Azura's Star - it gets consumed first if the corresponding
+		// config is enabled. For some reason, the formID of the default form is set to zero.
+		if (!Config::PrioritizeAzurasStar.GetValue())
+			return First.first.SoulGem->cSoulCapacity < Second.first.SoulGem->cSoulCapacity;
+		else if (First.first.SoulGem->IsAzurasStar())
 			return true;
-		else if ((Second.first.SoulGem->iFormID & 0x00FFFFFF) == 0x193)
+		else if (Second.first.SoulGem->IsAzurasStar())
 			return false; 
 		else
 			return First.first.SoulGem->cSoulCapacity < Second.first.SoulGem->cSoulCapacity;

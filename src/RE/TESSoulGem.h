@@ -25,6 +25,8 @@ public:
     std::uint8_t cSoulCapacity; // E1
     std::uint8_t padE2[6];      // E2
 
+	bool IsAzurasStar() const;
+
 	static std::uint32_t GetSoulLevelValue(const SOUL_LEVEL SoulLevel);
 
 	inline static REL::Relocation<TESSoulGem*> BlackSoulGem{ REL::Offset(0x9454690) };
