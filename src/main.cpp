@@ -126,20 +126,10 @@ namespace
 	}
 }
 
-OBSE_PLUGIN_PRELOAD(const OBSE::PreLoadInterface* a_obse)
+OBSE_PLUGIN_LOAD(const OBSE::LoadInterface* a_obse)
 {
 	//while (IsDebuggerPresent() == FALSE)
 	//	::Sleep(500);
-
-	OBSE::Init(a_obse);
-	
-	REX::INFO("Preload");
-	return true;
-}
-
-OBSE_PLUGIN_LOAD(const OBSE::LoadInterface* a_obse)
-{
-	spdlog::default_logger()->set_level(spdlog::level::debug);
 
 	OBSE::Init(a_obse, { .trampoline = true, .trampolineSize = 0x100 });
 	OBSE::GetMessagingInterface()->RegisterListener(MessageHandler);

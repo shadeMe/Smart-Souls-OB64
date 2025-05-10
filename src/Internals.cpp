@@ -159,16 +159,16 @@ namespace
 	{
 		// For some reason, the formID of the default form is set to zero.
 		const auto IsBlackSoulGem{ (Candidate.SoulGem->iFormID & 0x00FFFFFF) == 0x192 };
-		REX::DEBUG("IsSentient: {} | IsBlackSoulGem: {} | RestrictToNPCs: {}", IsSentient, IsBlackSoulGem, Config::RestrictBlackSoulGemsToNpcs.GetValue());
+		REX::INFO("IsSentient: {} | IsBlackSoulGem: {} | RestrictToNPCs: {}", IsSentient, IsBlackSoulGem, Config::RestrictBlackSoulGemsToNpcs.GetValue());
 
 		if (IsSentient)
-			OutChecks->Sentience = IsBlackSoulGem;
+			OutChecks->Sentience = IsBlackSoulGem || !Config::RestrictNpcsToBlackSoulGems.GetValue();
 		else if (Config::RestrictBlackSoulGemsToNpcs.GetValue())
 			OutChecks->Sentience = !IsBlackSoulGem;
 		else
 			OutChecks->Sentience = true;
 
-		REX::DEBUG("\t{}", OutChecks->Sentience ? "PASS" : "FAIL");
+		REX::INFO("\t{}", OutChecks->Sentience ? "PASS" : "FAIL");
 
 		return OutChecks->Sentience;
 	}
@@ -179,7 +179,7 @@ namespace
 		const auto MaxValue{ TESSoulGem::GetSoulLevelValue(CandidateCapacity) };
 		const auto TargetValue{ TESSoulGem::GetSoulLevelValue(Target) };
 
-		REX::DEBUG("Mode: {} | Current: {} | Capacity: {} | Target: {} | IsAzurasStar: {}", 
+		REX::INFO("Mode: {} | Current: {} | Capacity: {} | Target: {} | IsAzurasStar: {}", 
 				Config::SoulTrapMode.GetValue(), CurrentValue, MaxValue, TargetValue, IsAzurasStar);
 
 		bool Result{ false };
@@ -214,7 +214,7 @@ namespace
 		}
 		}
 
-		REX::DEBUG("\t{}", Result ? "PASS" : "FAIL");
+		REX::INFO("\t{}", Result ? "PASS" : "FAIL");
 
 		return Result;
 	}
@@ -229,10 +229,10 @@ namespace
 		auto IsAzurasStar { Candidate.SoulGem->IsAzurasStar() };
 
 		const auto Prefilled{ BaseSoulLevel != SOUL_LEVEL::SOUL_NONE };
-		REX::DEBUG("Item Count: {} | Prefilled: {} | UsePrefilledGems: {}", Candidate.GetCount(), Prefilled, Config::UsePrefilledGems.GetValue());
+		REX::INFO("Item Count: {} | Prefilled: {} | UsePrefilledGems: {}", Candidate.GetCount(), Prefilled, Config::UsePrefilledGems.GetValue());
 		if ((Prefilled && !Config::UsePrefilledGems.GetValue()) || Candidate.GetCount() == 0)
 		{
-			REX::DEBUG("\tFAIL");
+			REX::INFO("\tFAIL");
 			return false;
 		}
 
@@ -243,15 +243,15 @@ namespace
 			{
 				// A singleton item with no extradata stacks, so the base soul level
 				// is the one we need to compare against the target.
-				REX::DEBUG("Singleton inventory item ");
+				REX::INFO("Singleton inventory item ");
 				OutChecks->Capacity = CompareSoulValues(BaseSoulLevel, BaseSoulCapacity, TargetSoulLevel, IsAzurasStar);
 			}
 			else
 			{
 				// Fetch the first stack that can fit our target.
-				REX::DEBUG("Stacks: {}", Change->pExtraObjectList->Count());
+				REX::INFO("Stacks: {}", Change->pExtraObjectList->Count());
 				if (Change->pExtraObjectList->Count())
-					REX::DEBUG("{}", std::string(70, '-'));
+					REX::INFO("{}", std::string(70, '-'));
 				
 				std::size_t Idx{ 0 };
 				std::uint32_t ProcessedItemsInStacks {0};
@@ -269,7 +269,7 @@ namespace
 					// of the old stack by one, remove the soul extra data from the clone and
 					// prepend it to the stack list (so that ItemChange::SetSoul will pick it
 					// correctly).
-					REX::DEBUG("[{}] xSoul: {:#016X} | StackSoulLevel: {} | StackCount: {}", Idx, reinterpret_cast<std::uintptr_t>(xSoul), static_cast<std::uint8_t>(StackSoulLevel), StackCount);
+					REX::INFO("[{}] xSoul: {:#016X} | StackSoulLevel: {} | StackCount: {}", Idx, reinterpret_cast<std::uintptr_t>(xSoul), static_cast<std::uint8_t>(StackSoulLevel), StackCount);
 
 					OutChecks->Capacity = CompareSoulValues(StackSoulLevel, BaseSoulCapacity, TargetSoulLevel, IsAzurasStar);
 					ProcessedItemsInStacks += StackCount;
@@ -278,7 +278,7 @@ namespace
 						break;
 					++Idx;
 
-					REX::DEBUG("{}", std::string(70, '-'));
+					REX::INFO("{}", std::string(70, '-'));
 				}
 
 				
@@ -288,7 +288,7 @@ namespace
 				{
 					// The above count represents the items that are not part of the stacks,
 					// i.e., have no extradata. So, they are essentially the same as singleton items.
-					REX::DEBUG("Ex-stack inventory items | Count: {}", NonStackedCount);
+					REX::INFO("Ex-stack inventory items | Count: {}", NonStackedCount);
 					OutChecks->Capacity = CompareSoulValues(BaseSoulLevel, BaseSoulCapacity, TargetSoulLevel, IsAzurasStar);
 				}
 			}
@@ -340,25 +340,25 @@ FinalCandidates SelectBestSoulGem(InventoryChanges* Changes, TESObjectREFR* Dead
 	EnumerateBaseContainer(OwnerBaseContainer, &MainBucket);
 	EnumerateInventoryChanges(Changes, &MainBucket);
 
-	REX::DEBUG("Enumerated {} candidates", MainBucket.size());
+	REX::INFO("Enumerated {} candidates", MainBucket.size());
 
 	// Check and separate candidates by separating into two more shortlists.
 	for (const auto& Itr : MainBucket)
 	{
-		REX::DEBUG("{}", std::string(70, '='));
-		REX::DEBUG("Checking candidate '{}' ({:08X}) | HasInventory: {}", Itr.first->cFullName.pString, Itr.first->iFormID, Itr.second.HasInventory());
+		REX::INFO("{}", std::string(70, '='));
+		REX::INFO("Checking candidate '{}' ({:08X}) | HasInventory: {}", Itr.first->cFullName.pString, Itr.first->iFormID, Itr.second.HasInventory());
 
 		SoulSacrificeChecks NoChecksAndBalances;
 
 		if (!CheckSentience(Itr.second, SentientSoul, &NoChecksAndBalances))
 		{
-			REX::DEBUG("{}", std::string(70, '='));
+			REX::INFO("{}", std::string(70, '='));
 			continue;
 		}
 
 		if (!CheckCapacity(Itr.second, TargetSoulLevel, &NoChecksAndBalances))
 		{
-			REX::DEBUG("{}", std::string(70, '='));
+			REX::INFO("{}", std::string(70, '='));
 			continue;
 		}
 
@@ -367,12 +367,12 @@ FinalCandidates SelectBestSoulGem(InventoryChanges* Changes, TESObjectREFR* Dead
 		else
 			BaseContainerOnly.emplace_back(Itr.second, NoChecksAndBalances);
 
-		REX::DEBUG("{}", std::string(70, '='));
+		REX::INFO("{}", std::string(70, '='));
 	}
 
 	FinalCandidates Out;
 
-	REX::DEBUG("Shortlists: BaseContainerOnly [{}] | Inventory [{}] ", BaseContainerOnly.size(), Inventory.size());
+	REX::INFO("Shortlists: BaseContainerOnly [{}] | Inventory [{}] ", BaseContainerOnly.size(), Inventory.size());
 
 	// Sort the shortlists such that the smallest (in capacity/value) candidate gets picked.
 	// Candidates with inventory changes are given priority.
