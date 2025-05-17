@@ -21,9 +21,10 @@ namespace Hooks
 				return OutCandidates;
 
 			REX::INFO("{}", std::string(70, '#'));
-			REX::INFO("Soul Trap by '{:08X}' on '{:08X}'",
+			REX::INFO("Soul Trap by '{:08X}' on '{:08X} [{:02X}]'",
 			          Changes->pRef->iFormID,
-			          DeadActor->iFormID);
+			          DeadActor->iFormID,
+					  DeadActor->data.pObjectReference->cFormType);
 
 			auto Out { SelectBestSoulGem(Changes, DeadActor) };
 			OutCandidates->BaseContainer = Out.BaseContainer;

@@ -10,6 +10,13 @@ namespace Config
 			"OBSE/Plugins/Smart-Souls.ini",
 			"OBSE/Plugins/Smart-Souls.ini");
 		ini->Load();
+
+		REX::INFO("Loaded INI file");
+		REX::INFO("bRestrictBlackSoulGemsToNpcs: {}", RestrictBlackSoulGemsToNpcs.GetValue());
+		REX::INFO("bRestrictNpcsToBlackSoulGems: {}", RestrictNpcsToBlackSoulGems.GetValue());
+		REX::INFO("bUsePrefilledGems: {}", UsePrefilledGems.GetValue());
+		REX::INFO("sSoulTrapMode: {}", SoulTrapMode.GetValue());
+		REX::INFO("bPrioritizeAzurasStar: {}", PrioritizeAzurasStar.GetValue());
 	}
 
 	ESoulTrapMode GetSoulTrapMode()

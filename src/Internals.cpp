@@ -324,7 +324,7 @@ FinalCandidates SelectBestSoulGem(InventoryChanges* Changes, TESObjectREFR* Dead
 		DeadActor->data.pObjectReference->cFormType == FormType::CREA_ID ? GetCreatureSoulLevel(DeadActor->data.pObjectReference) : SOUL_LEVEL::SOUL_GRAND
 	};
 	const auto SentientSoul{
-		DeadActor->cFormType == FormType::NPC__ID
+		DeadActor->data.pObjectReference->cFormType == FormType::NPC__ID
 	};
 
 	SoulBucket MainBucket;
