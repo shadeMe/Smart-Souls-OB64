@@ -26,10 +26,11 @@ public:
     std::uint8_t padE2[6];      // E2
 
 	bool IsAzurasStar() const;
+	bool IsEmptyBlackSoulGem() const;
 
 	static std::uint32_t GetSoulLevelValue(const SOUL_LEVEL SoulLevel);
 
-	inline static REL::Relocation<TESSoulGem*> BlackSoulGem{ REL::Offset(0x9454690) };
-	inline static REL::Relocation<TESSoulGem*> AzurasStar{ REL::Offset(0x9454698) };
+	inline static REL::Relocation<TESSoulGem*> BlackSoulGem{ REL::ID(1666985) };
+	inline static REL::Relocation<TESSoulGem*> AzurasStar{ REL::ID(1666986) };
 };
 static_assert(sizeof(TESSoulGem) == 0xE8);

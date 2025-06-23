@@ -1,5 +1,7 @@
 #pragma once
 
+
+
 struct Candidate
 {
 	TESSoulGem* SoulGem;
@@ -38,5 +40,3 @@ struct FinalCandidates
 };
 
 FinalCandidates SelectBestSoulGem(InventoryChanges* Changes, TESObjectREFR* DeadActor);
-
-

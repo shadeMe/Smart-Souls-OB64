@@ -3,6 +3,6 @@
 TESContainer* TESObjectREFR::HasContainer()
 {
 	using func_t = decltype(&TESObjectREFR::HasContainer);
-	static REL::Relocation<func_t> func{ REL::Offset(0x65A9FF0) };
+	static REL::Relocation<func_t> func{ REL::ID(405511) };
 	return func(this);
 }

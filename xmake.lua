@@ -6,14 +6,12 @@ includes("lib/commonlibob64")
 
 -- set project
 set_project("Smart-Souls")
-set_version("1.2.0")
+set_version("2.0.0")
 set_license("GPL-3.0")
 
 -- set defaults
 set_languages("c++23")
 set_warnings("allextra")
-set_optimize("faster")
-set_warnings("allextra", "error")
 set_defaultmode("releasedbg")
 
 -- set policies
@@ -24,8 +22,8 @@ add_rules("mode.debug", "mode.releasedbg")
 add_rules("plugin.vsxmake.autoupdate")
 
 -- add config
-set_config("rex_ini", true)
-set_config("obse_xbyak", true)
+set_config("commonlib_ini", true)
+set_config("commonlib_xbyak", true)
 
 -- targets
 target("Smart-Souls")

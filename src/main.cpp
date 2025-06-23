@@ -3,11 +3,10 @@
 
 namespace Hooks
 {
-	using namespace RE;
 
 	namespace InventoryChanges_SetBestSoulGem
 	{
-		AddressT Function{ REL::Offset(0x6671860) };
+		AddressT Function{ REL::ID(407667) };
 		AddressT Target{ Function.address() + 0xD2 };
 		AddressT Return{ Function.address() + 0x3A3 };
 
@@ -88,7 +87,7 @@ namespace Hooks
 
 	namespace ItemChange_SetSoul
 	{
-		AddressT Function{ REL::Offset(0x6672790) };
+		AddressT Function{ REL::ID(407674) };
 
 		void Install()
 		{

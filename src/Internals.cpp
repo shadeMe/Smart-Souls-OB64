@@ -109,7 +109,7 @@ namespace
 	SOUL_LEVEL GetCreatureSoulLevel(TESBoundObject* Creature)
 	{
 		using func_t = decltype(&GetCreatureSoulLevel);
-		static REL::Relocation<func_t> func{ REL::Offset(0x6868FE0) };
+		static REL::Relocation<func_t> func{ REL::ID(413247) };
 		return func(Creature);
 	}
 
@@ -158,7 +158,7 @@ namespace
 	bool CheckSentience(const Candidate& Candidate, const bool IsSentient, SoulSacrificeChecks* OutChecks)
 	{
 		// For some reason, the formID of the default form is set to zero.
-		const auto IsBlackSoulGem{ (Candidate.SoulGem->iFormID & 0x00FFFFFF) == 0x192 };
+		const auto IsBlackSoulGem{ Candidate.SoulGem->IsEmptyBlackSoulGem() };
 		REX::INFO("IsSentient: {} | IsBlackSoulGem: {} | RestrictToNPCs: {}", IsSentient, IsBlackSoulGem, Config::RestrictBlackSoulGemsToNpcs.GetValue());
 
 		if (IsSentient)
